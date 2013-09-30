@@ -2,24 +2,31 @@ package org.pg.codecity;
 
 import com.habelitz.jsobjectizer.unmarshaller.antlrbridge.generated.JavaLexer;
 import com.habelitz.jsobjectizer.unmarshaller.antlrbridge.generated.JavaParser;
-import org.antlr.runtime.ANTLRFileStream;
+import org.antlr.runtime.ANTLRInputStream;
 import org.antlr.runtime.CommonTokenStream;
-import org.antlr.runtime.RecognitionException;
 import org.antlr.runtime.tree.CommonTree;
 import org.antlr.runtime.tree.Tree;
 import org.antlr.runtime.tree.TreeVisitor;
 import org.antlr.runtime.tree.TreeVisitorAction;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.List;
 
 public class JavaClass implements TreeVisitorAction {
+
+    private enum ClassType {CLASS, INTERFACE, ENUM}
+
+    private JavaClass() {};
+
     String _package;
     String _className;
+    ClassType _classType;
     List<String> importList = new ArrayList<String>();
 
-    public static JavaClass parseCommonTree(String fileName) throws Exception {
-        JavaLexer lexer = new JavaLexer(new ANTLRFileStream(fileName));
+    public static JavaClass parseCommonTree(File file) throws Exception {
+        JavaLexer lexer = new JavaLexer(new ANTLRInputStream(new FileInputStream(file)));
         JavaParser parser = new JavaParser(new CommonTokenStream(lexer));
         CommonTree tree = parser.javaSource().getTree();
         JavaClass _class = new JavaClass();
@@ -42,13 +49,43 @@ public class JavaClass implements TreeVisitorAction {
         CommonTree tree = (CommonTree) o;
         if (tree.getText().equals("package")) {
             _package = getPathRec(tree.getChild(0));
+            return null;
         } else if (tree.getText().equals("import")) {
-            importList.add(getPathRec(tree.getChild(0)));
+            if (tree.getChild(0).getText().equals("static")) {
+                importList.add(getPathRec(tree.getChild(1)));
+            } else {
+                importList.add(getPathRec(tree.getChild(0)));
+            }
+            return null;
         } else if (tree.getText().equals("class")) {
-            _className = tree.getChild(1).getText();
+            if (hasChildrenToken(tree, "CLASS_TOP_LEVEL_SCOPE")) {
+                _classType = ClassType.CLASS;
+                _className = tree.getChild(1).getText();
+            }
+        } else if (tree.getText().equals("interface")) {
+            if (hasChildrenToken(tree, "CLASS_TOP_LEVEL_SCOPE")) {
+                _classType = ClassType.INTERFACE;
+                _className = tree.getChild(1).getText();
+            }
+        } else if (tree.getText().equals("enum")) {
+            if (hasChildrenToken(tree, "ENUM_TOP_LEVEL_SCOPE")) {
+                _classType = ClassType.ENUM;
+                _className = tree.getChild(1).getText();
+            }
         }
 
         return o;
+    }
+
+    private boolean hasChildrenToken(CommonTree tree, String tokenName) {
+        for (int i = 0; i < tree.getChildCount(); i++) {
+            Tree child = tree.getChild(i);
+            if (child.getText().equals(tokenName)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private String getPathRec(Tree ct) {
@@ -75,6 +112,6 @@ public class JavaClass implements TreeVisitorAction {
     }
 
     private String getFullyQualifiedClassName() {
-        return _package + "." + _className;
+        return _package + "." + _className + " (" +_classType +")";
     }
 }
