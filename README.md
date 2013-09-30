@@ -1,4 +1,4 @@
 codecity
 ========
 
-Code Source Visualizer
+Source Code Visualizer
